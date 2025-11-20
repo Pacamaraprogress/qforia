@@ -5,30 +5,30 @@ import json
 import re
 
 # App config
-st.set_page_config(page_title="Qforia 3.0", layout="wide")
-st.title("🔍 Qforia: Query Fan-Out Simulator (Expert Mode)")
+st.set_page_config(page_title="Qforia 3.1", layout="wide")
+st.title("🔍 Qforia: Query Fan-Out (Expert + Industry Data)")
 
-# --- 1. MODEL CATALOG ---
+# --- 1. MODEL CATALOG (Verified Nov 2025 IDs) ---
 MODEL_CATALOG = {
-    "Gemini 2.5 Pro": {
-        "id": "gemini-2.0-pro-exp-02-05", # Best current stable-ish preview or use 1.5-pro if preferred
+    "Gemini 3.0 Pro (Preview)": {
+        "id": "gemini-3-pro-preview", # Note: No ".0" in the ID
+        "icon": "🚀",
+        "desc": "Deepest reasoning & 'vibe coding'. Best for complex industry logic."
+    },
+    "Gemini 2.5 Pro (Stable)": {
+        "id": "gemini-2.5-pro", 
         "icon": "⚖️",
-        "desc": "The best balance of complex reasoning and stability."
+        "desc": "High rate limits. The reliable workhorse for production apps."
     },
     "Gemini 2.5 Flash": {
-        "id": "gemini-2.0-flash-thinking-exp-01-21", 
+        "id": "gemini-2.5-flash", 
         "icon": "⚡",
-        "desc": "Optimized for speed and thinking process."
+        "desc": "Fast & cheap. Good for generating large tables quickly."
     },
-    "Gemini 1.5 Pro (Legacy)": {
-        "id": "gemini-1.5-pro",
+    "Gemini 1.5 Pro (Legacy 002)": {
+        "id": "gemini-1.5-pro-002", # Use '002' to avoid 404 on generic alias
         "icon": "🛡️",
-        "desc": "Universal fallback. Reliable and widely available."
-    },
-    "Gemini 3.0 (Preview/Private)": {
-        "id": "gemini-3.0-pro-preview", 
-        "icon": "🚀",
-        "desc": "Access to V3 architecture (requires specific allowlist)."
+        "desc": "Previous stable version. Use if 2.5 is unavailable in your region."
     }
 }
 
@@ -37,61 +37,44 @@ st.sidebar.header("Configuration")
 gemini_key = st.sidebar.text_input("Gemini API Key", type="password")
 
 st.sidebar.markdown("---")
-st.sidebar.subheader("🤖 Model Selection")
+st.sidebar.subheader("🤖 AI Model Selector")
 selected_model_name = st.sidebar.selectbox("Choose Model", options=list(MODEL_CATALOG.keys()), index=0)
 
-# Get details
 current_model = MODEL_CATALOG[selected_model_name]
 model_id = current_model["id"]
 st.sidebar.info(f"**{current_model['icon']} {selected_model_name}**\n\n{current_model['desc']}")
 
 # Custom Override
-if st.sidebar.checkbox("Override Model ID"):
-    model_id = st.sidebar.text_input("Custom ID", model_id)
+if st.sidebar.checkbox("Override Model ID manually?"):
+    model_id = st.sidebar.text_input("Enter Custom ID (e.g., gemini-exp-1121)", model_id)
 
 st.sidebar.markdown("---")
-user_query = st.sidebar.text_area("Enter your query", "What's the best electric SUV for driving up mt rainier?", height=120)
+user_query = st.sidebar.text_area("Enter your query", "How to implement RAG pipelines for legal discovery?", height=100)
 mode = st.sidebar.radio("Search Mode", ["AI Overview (simple)", "AI Mode (complex)"])
 
 if gemini_key:
     genai.configure(api_key=gemini_key)
 
-# --- 2. RESTORED ORIGINAL PROMPT LOGIC ---
+# --- 2. PROMPT LOGIC (Updated for FAQs & Industry) ---
 def QUERY_FANOUT_PROMPT(q, mode):
-    min_queries_simple = 10
-    min_queries_complex = 20
-
+    # Adjust counts based on mode
     if mode == "AI Overview (simple)":
-        num_queries_instruction = (
-            f"First, analyze the user's query: \"{q}\". Based on its complexity and the '{mode}' mode, "
-            f"**you must decide on an optimal number of queries to generate.** "
-            f"This number must be **at least {min_queries_simple}**. "
-            f"For a straightforward query, generating around {min_queries_simple}-{min_queries_simple + 2} queries might be sufficient. "
-            f"If the query has a few distinct aspects, aim for {min_queries_simple + 3}-{min_queries_simple + 5}. "
-            f"Provide a brief reasoning for why you chose this specific number."
-        )
-    else:  # AI Mode (complex)
-        num_queries_instruction = (
-            f"First, analyze the user's query: \"{q}\". Based on its complexity and the '{mode}' mode, "
-            f"**you must decide on an optimal number of queries to generate.** "
-            f"This number must be **at least {min_queries_complex}**. "
-            f"For multifaceted queries, generate potentially {min_queries_complex + 5}-{min_queries_complex + 10} queries. "
-            f"Provide a brief reasoning for why you chose this specific number."
-        )
+        min_q = 8
+        instr = f"Generate at least {min_q} queries covering basic concepts."
+    else:
+        min_q = 15
+        instr = f"Generate at least {min_q} queries covering deep technical, strategic, and edge-case aspects."
 
-    # Restoring the FULL detailed instructions
     return (
-        f"You are simulating Google's AI Mode query fan-out process for generative search systems.\n"
-        f"The user's original query is: \"{q}\". The selected mode is: \"{mode}\".\n\n"
-        f"**Task 1: Planning**\n"
-        f"{num_queries_instruction}\n\n"
-        f"**Task 2: Generation**\n"
-        f"Once you have decided on the number, generate exactly that many unique synthetic queries.\n"
-        f"Each of the following query transformation types MUST be represented at least once if the count allows:\n"
-        f"1. Reformulations\n2. Related Queries\n3. Implicit Queries\n4. Comparative Queries\n5. Entity Expansions\n6. Personalized Queries\n\n"
-        f"The 'reasoning' field for each *individual query* should explain why that specific query was generated.\n"
-        f"Do NOT include queries dependent on real-time user history or geolocation.\n\n"
-        f"**Return ONLY valid JSON following this format:**\n"
+        f"You are an expert search strategist simulating Google's advanced query fan-out.\n"
+        f"User Query: \"{q}\"\nMode: \"{mode}\"\n\n"
+        f"**Instructions:**\n"
+        f"1. {instr}\n"
+        f"2. Ensure diversity (Reformulations, Edge Cases, Comparative, Technical).\n"
+        f"3. For EACH query, you must also generate:\n"
+        f"   - **Related FAQ:** A specific, high-value question a user would ask next.\n"
+        f"   - **Industry Usage:** The specific business sector or use-case this query is most relevant to (e.g., 'Legal Tech', 'Ecommerce Logistics', 'Healthcare Compliance').\n\n"
+        f"**Output Format:** Return ONLY a valid JSON object:\n"
         f"{{\n"
         f"  \"generation_details\": {{\n"
         f"    \"target_query_count\": <integer>,\n"
@@ -99,16 +82,17 @@ def QUERY_FANOUT_PROMPT(q, mode):
         f"  }},\n"
         f"  \"expanded_queries\": [\n"
         f"    {{\n"
-        f"      \"query\": \"...\",\n"
-        f"      \"type\": \"...\",\n"
-        f"      \"user_intent\": \"...\",\n"
-        f"      \"reasoning\": \"...\"\n"
+        f"      \"query\": \"<string>\",\n"
+        f"      \"type\": \"<string> (e.g. Reformulation, Comparative)\",\n"
+        f"      \"reasoning\": \"<string>\",\n"
+        f"      \"related_faq\": \"<string>\",\n"
+        f"      \"industry_usage\": \"<string>\"\n"
         f"    }}\n"
         f"  ]\n"
         f"}}"
     )
 
-# --- 3. ROBUST GENERATION FUNCTION ---
+# --- 3. GENERATION FUNCTION ---
 def generate_fanout(query, mode, active_model_id):
     if not gemini_key:
         st.error("❌ Missing API Key")
@@ -119,7 +103,7 @@ def generate_fanout(query, mode, active_model_id):
     try:
         model = genai.GenerativeModel(active_model_id)
         
-        # Use response_mime_type for cleaner JSON, but keep text cleaning just in case
+        # Force JSON output
         response = model.generate_content(
             prompt,
             generation_config=genai.GenerationConfig(
@@ -128,29 +112,25 @@ def generate_fanout(query, mode, active_model_id):
             )
         )
         
+        # Clean potential markdown formatting
         json_text = response.text.strip()
-        
-        # Safety: Clean markdown fences if the model adds them despite mime_type
-        if json_text.startswith("```json"):
-            json_text = json_text[7:]
-        if json_text.startswith("```"):
-            json_text = json_text[3:]
-        if json_text.endswith("```"):
-            json_text = json_text[:-3]
+        if json_text.startswith("```json"): json_text = json_text[7:]
+        if json_text.startswith("```"): json_text = json_text[3:]
+        if json_text.endswith("```"): json_text = json_text[:-3]
             
-        data = json.loads(json_text)
-        return data
+        return json.loads(json_text)
 
     except Exception as e:
-        st.error(f"🔴 Error with model **{active_model_id}**: {e}")
+        st.error(f"🔴 Error with **{active_model_id}**: {e}")
+        st.warning("💡 Try switching to 'Gemini 2.5 Pro (Stable)' if using an Experimental or Preview model.")
         return None
 
-# Initialize session state
+# Initialize State
 if 'data' not in st.session_state:
     st.session_state.data = None
 
-# --- 4. EXECUTION & DISPLAY ---
-if st.sidebar.button("Run Fan-Out 🚀"):
+# --- 4. UI EXECUTION ---
+if st.sidebar.button("Run Analysis 🚀"):
     st.session_state.data = None
     
     if not user_query.strip():
@@ -158,54 +138,48 @@ if st.sidebar.button("Run Fan-Out 🚀"):
     elif not gemini_key:
         st.warning("⚠️ Please enter your API Key.")
     else:
-        with st.spinner(f"🤖 Generating using {selected_model_name}..."):
+        with st.spinner(f"🤖 analyzing using {selected_model_name}..."):
             result_data = generate_fanout(user_query, mode, model_id)
 
         if result_data:
             st.session_state.data = result_data
-            st.success("✅ Query fan-out complete!")
+            st.success("✅ Analysis Complete!")
 
-# --- 5. RESULTS (With Original Dataframe Logic) ---
+# --- 5. RESULTS TABLE ---
 if st.session_state.data:
     data = st.session_state.data
     details = data.get("generation_details", {})
     queries = data.get("expanded_queries", [])
 
-    target = details.get('target_query_count', 'N/A')
-    reasoning = details.get('reasoning_for_count', 'Not provided.')
-    actual = len(queries)
-
-    # Header Stats
-    st.markdown("---")
-    st.subheader("🧠 Model Strategy")
-    st.info(f"**Reasoning:** {reasoning}")
-    
+    # Metrics
+    st.markdown("### 📊 Strategy Overview")
     c1, c2, c3 = st.columns(3)
-    c1.metric("Target Count", target)
-    c2.metric("Actual Generated", actual)
-    c3.metric("Model ID", model_id)
+    c1.metric("Target Queries", details.get('target_query_count', 'N/A'))
+    c2.metric("Actual Generated", len(queries))
+    c3.metric("Model", model_id)
+    
+    st.info(f"**AI Reasoning:** {details.get('reasoning_for_count', 'N/A')}")
 
-    if isinstance(target, int) and target != actual:
-        st.warning(f"⚠️ Model aimed for {target} but produced {actual}.")
-
-    # DataFrame
-    st.markdown("### 🔍 Generated Queries")
+    # Main Table
+    st.markdown("### 🧩 Expanded Query Matrix")
     df = pd.DataFrame(queries)
     
     if not df.empty:
-        # Restored your specific height calculation
-        height = (min(len(df), 20) + 1) * 35 + 3
-        
+        # Configure columns for readability
         st.dataframe(
-            df, 
-            use_container_width=True, 
-            height=height,
+            df,
+            use_container_width=True,
+            height=600,
             column_config={
                 "query": st.column_config.TextColumn("Synthetic Query", width="medium"),
+                "related_faq": st.column_config.TextColumn("Related FAQ", width="medium"),
+                "industry_usage": st.column_config.TextColumn("Industry Scope", width="small"),
                 "type": st.column_config.TextColumn("Type", width="small"),
                 "reasoning": st.column_config.TextColumn("Rationale", width="large"),
-            }
+            },
+            # Reorder columns to put the new ones "near" the query
+            column_order=["query", "related_faq", "industry_usage", "type", "reasoning"] 
         )
 
         csv = df.to_csv(index=False).encode("utf-8")
-        st.download_button("📥 Download CSV", data=csv, file_name=f"qforia_{model_id}.csv", mime="text/csv")
+        st.download_button("📥 Download CSV", data=csv, file_name=f"qforia_{model_id}_full.csv", mime="text/csv")
